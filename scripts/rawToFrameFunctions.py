@@ -10,9 +10,11 @@ sys.path.append("..")
 
 from brkraw.lib.parser import Parameter
 from brkraw.lib.pvobj import PvDatasetDir
-from brkraw.lib.utils import get_value
+from brkraw.lib.utils import get_value, set_value
 import brkraw as br
 from brkraw.lib.reference import WORDTYPE, BYTEORDER
+
+from recoFunctions import *
 
 import os
 import numpy as np
@@ -196,6 +198,7 @@ def convertFrameToCKData(frame, acqp, meth):
     
     return data
 
+## --------------------------------------------------------------------------##
 
 MainDir = "E:\\TimHo\\CCM_data_12022022\\20221202_Price_CCM\Price-Delaney-CCM\\Price-Delaney-CCM_20220519_PDGFb29_30_Cdh5319_320_20220913_CCM_Scr_E1_P1\\20220913_134021_Price_Delaney_CCM_20220913_CCM_Screening_1_9"
 ExpNum = 7
@@ -207,7 +210,8 @@ rawdata = br.load(os.path.join(MainDir))
 fid_binary = rawdata.get_fid(ExpNum)
 acqp = rawdata.get_acqp(ExpNum)
 meth = rawdata.get_method(ExpNum)
-reco = Parameter(open(os.path.join(MainDir, str(ExpNum),'pdata','1','reco'),'r').read().split('\n'))
+with open(os.path.join(MainDir, str(ExpNum),'pdata','1','reco'),'r') as f:
+    reco = Parameter(f.read().split('\n'))
 
 
 # test functions
@@ -215,22 +219,39 @@ raw_sort = readBrukerRaw(fid_binary, acqp, meth)
 frame = convertRawToFrame(raw_sort, acqp, meth)
 kdata = convertFrameToCKData(frame, acqp, meth)
 
+
+
+# Other stuff
+RECO_ft_mode = get_value(reco, 'RECO_ft_mode')
+
+if '360' in meth.headers['title'.upper()]:
+    reco_ft_mode_new = []
+    
+    for i in RECO_ft_mode:
+        if i == 'COMPLEX_FT' or i == 'COMPLEX_FFT':
+            reco_ft_mode_new.append('COMPLEX_IFT')
+        else:
+            reco_ft_mode_new.append('COMPLEX_FT')
+            
+reco = set_value(reco, 'RECO_ft_mode', reco_ft_mode_new)
+RECO_ft_mode = get_value(reco, 'RECO_ft_mode')
+
+
+#def brkraw_Reco(kdata, Reco, recopart = 'all')
+
+# Adapt FT convention to acquisition version.
 N1, N2, N3, N4, N5, N6, N7 = kdata.shape
-
-
-
-#def brkraw_Reco(kdata, Reco, recopart)
 recopart = 'all'
 
-dims=kdata.shape[0:4];
+dims = kdata.shape[0:4];
 for i in range(4):
     if dims[i]>1:
-        dimnumber=(i+1);
+        dimnumber = (i+1);
     
 NINR=kdata.shape[5]*kdata.shape[6]
 
 if recopart == 'all':
-    recopart=['quadrature', 'phase_rotate', 'zero_filling', 'FT', 'phase_corr_pi', 
+    recopart = ['quadrature', 'phase_rotate', 'zero_filling', 'FT', 'phase_corr_pi', 
               'cutoff',  'scale_phase_channels', 'sumOfSquares', 'transposition']
 
 # all transposition the same?
@@ -242,12 +263,17 @@ for i in get_value(reco, 'RECO_transposition'):
 
 map_index= np.reshape( np.arange(0,kdata.shape[5]*kdata.shape[6]), (kdata.shape[6], kdata.shape[5]) )
 
-
-# if 'quadrature' in recopart:
-#     quad()
+if 'quadrature' in recopart:
+    for NR in range(N7):
+        for NI in range(N6):
+            for chan in range(N5):
+                reco_qopts(kdata[:,:,:,:,chan,NI,NR], reco, NI*NR)
     
-# if 'phase_rotate' in recopart:
-#     phase_rot()
+if 'phase_rotate' in recopart:
+    for NR in range(N7):
+        for NI in range(N6):
+            for chan in range(N5):
+                phase_rot(kdata[:,:,:,:,chan,NI,NR], reco, NI*NR)
     
 # if 'zero_filling' in recopart:
 #     zero_fill()
