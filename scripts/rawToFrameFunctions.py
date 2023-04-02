@@ -14,13 +14,13 @@ from brkraw.lib.utils import get_value, set_value
 import brkraw as br
 from brkraw.lib.reference import WORDTYPE, BYTEORDER
 
-from recoFunctions import *
 from raw2frame import *
+from recoFunctions import *
 
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-
+import time
 
 ## --------------------------------------------------------------------------##
 
@@ -39,114 +39,35 @@ with open(os.path.join(MainDir, str(ExpNum),'pdata','1','reco'),'r') as f:
 
 
 # test functions
+
+start_time = time.time()
 raw_sort = readBrukerRaw(fid_binary, acqp, meth)
+print("--- %s seconds ---" % (time.time() - start_time))
+
+start_time = time.time()
 frame = convertRawToFrame(raw_sort, acqp, meth)
+print("--- %s seconds ---" % (time.time() - start_time))
+
+start_time = time.time()
 kdata = convertFrameToCKData(frame, acqp, meth)
+print("--- %s seconds ---" % (time.time() - start_time))
 
 
-reco_result = np.zeros(kdata.shape).astype(kdata.dtype)
-# Other stuff
-RECO_ft_mode = get_value(reco, 'RECO_ft_mode')
-
-if '360' in meth.headers['title'.upper()]:
-    reco_ft_mode_new = []
-    
-    for i in RECO_ft_mode:
-        if i == 'COMPLEX_FT' or i == 'COMPLEX_FFT':
-            reco_ft_mode_new.append('COMPLEX_IFT')
-        else:
-            reco_ft_mode_new.append('COMPLEX_FT')
-            
-    reco = set_value(reco, 'RECO_ft_mode', reco_ft_mode_new)
-    RECO_ft_mode = get_value(reco, 'RECO_ft_mode')
+#recoFunctions.reco_phase_corr_pi(kdata[:,:,:,:,0,0,0], reco,0)
 
 
-#def brkraw_Reco(kdata, Reco, recopart = 'all')
+start_time = time.time()
+image = brkraw_Reco(kdata, reco, meth, recoparts = 'all')
+print("--- %s seconds ---" % (time.time() - start_time))
 
-# Adapt FT convention to acquisition version.
-N1, N2, N3, N4, N5, N6, N7 = kdata.shape
-recopart = 'all'
-
-dims = kdata.shape[0:4];
-for i in range(4):
-    if dims[i]>1:
-        dimnumber = (i+1);
-    
-NINR=kdata.shape[5]*kdata.shape[6]
-
-if recopart == 'all':
-    recopart = ['quadrature', 'phase_rotate', 'zero_filling', 'FT', 'phase_corr_pi', 
-              'cutoff',  'scale_phase_channels', 'sumOfSquares', 'transposition']
-
-# all transposition the same?
-same_transposition = True
-for i in get_value(reco, 'RECO_transposition'):
-    if i != get_value(reco, 'RECO_transposition')[0]:
-        same_transposition = False
-
-
-map_index= np.reshape( np.arange(0,kdata.shape[5]*kdata.shape[6]), (kdata.shape[6], kdata.shape[5]) )
-
-# if 'quadrature' in recopart:
-#     for NR in range(N7):
-#         for NI in range(N6):
-#             for chan in range(N5):
-#                 reco_qopts(kdata[:,:,:,:,chan,NI,NR], reco, NI*NR)
-    
-# if 'phase_rotate' in recopart:
-#     for NR in range(N7):
-#         for NI in range(N6):
-#             for chan in range(N5):
-#                 reco_phase_rot(kdata[:,:,:,:,chan,NI,NR], reco, NI*NR)
-  
-# if 'zero_filling' in recopart:
-#     zero_fill()
-
-if 'FT' in recopart:
-    for NR in range(N7):
-        for NI in range(N6):
-            for chan in range(N5):
-                reco_result[:,:,:,:,chan,NI,NR] = reco_ft(kdata[:,:,:,:,chan,NI,NR], reco)
-
-
-# if 'phase_corr_pi' in recopart:
-#     reco_phase_corr_pi()
- 
-# if 'cutoff' in recopart:  
-#     reco_cutoff()
-    
-# if 'scale_phase_channels' in recopart: 
-#     reco_scale_phase_channels()
-    
-if 'sumOfSquares' in recopart:
-    for NR in range(N7):
-        for NI in range(N6):
-            #print(reco_result[:,:,:,:,:1,NI,NR].shape)
-            print(NR+1, NI+1)
-            reco_result[:,:,:,:,:1,NI,NR] = reco_sumofsquares(reco_result[:,:,:,:,:,NI,NR], reco)
-    reco_result = reco_result[:,:,:,:,:1,:,:]
-
-#if 'transposition' in recopart:
-#    transposition()
-
-# from numpy.fft import fft2, ifft2,fftshift, ifftshift, fftn
-
-# kdata = fftn(kdata[:,:,:,0,0,0,0])
-
-# for i in range(N3):
-#     plt.figure()
-    
-#     for j in range(N6):
-#         img = np.squeeze(reco_result[:,:,i,0,0,j,0])
-#         #img = fft2(img)
-#         plt.subplot(2,4,j+1)
-#         plt.imshow(np.abs(img))
-#         plt.title(j) 
-# y_max = np.abs(np.max(reco_result))
-# plt.figure()
-# for i in range(N1):
-#     for j in range(N2):
-        
-#         if np.max(np.abs(reco_result[i,j,64,0,0,:,0])) > 2500: 
-#             plt.plot(np.abs(reco_result[i,j,64,0,0,:,0]))
-#             plt.ylim(ymax = y_max, ymin = 0)
+"""
+N1 = 12
+for i in range(N1):
+    plt.figure()
+    for j in range(4):
+        plt.subplot(2,2,j+1)
+        plt.imshow(np.squeeze(np.angle(image[:,:,i,0,j,0,0])))
+"""
+print(image[63:65,63:65,63,0,3,0])
+plt.figure()
+plt.plot(np.abs(image[64,64,64,0,0,:]))

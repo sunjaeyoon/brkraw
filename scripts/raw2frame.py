@@ -6,6 +6,7 @@ Created on Thu Feb  2 10:06:38 2023
 """
 
 from brkraw.lib.utils import get_value, set_value
+import recoFunctions
 import numpy as np
 
 def readBrukerRaw(fid_binary, acqp, meth):
@@ -184,3 +185,140 @@ def convertFrameToCKData(frame, acqp, meth):
         raise 'Unknown ACQ_dim with useMethod'
     
     return data
+
+
+def brkraw_Reco(kdata, reco, meth, recoparts = 'all'):
+    reco_result = kdata.copy()
+    # Other stuff
+    RECO_ft_mode = get_value(reco, 'RECO_ft_mode')
+    
+    if '360' in meth.headers['title'.upper()]:
+        reco_ft_mode_new = []
+        
+        for i in RECO_ft_mode:
+            if i == 'COMPLEX_FT' or i == 'COMPLEX_FFT':
+                reco_ft_mode_new.append('COMPLEX_IFT')
+            else:
+                reco_ft_mode_new.append('COMPLEX_FT')
+                
+        reco = set_value(reco, 'RECO_ft_mode', reco_ft_mode_new)
+        RECO_ft_mode = get_value(reco, 'RECO_ft_mode')
+        
+    # Adapt FT convention to acquisition version.
+    N1, N2, N3, N4, N5, N6, N7 = kdata.shape
+
+    dims = kdata.shape[0:4];
+    for i in range(4):
+        if dims[i]>1:
+            dimnumber = (i+1);
+        
+    NINR=kdata.shape[5]*kdata.shape[6]
+    signal_position=np.ones(shape=(dimnumber,1))*0.5;
+    
+    if recoparts == 'all':
+        recoparts = ['quadrature', 'phase_rotate', 'zero_filling', 'FT', 'phase_corr_pi', 
+                  'cutoff',  'scale_phase_channels', 'sumOfSquares', 'transposition']
+        
+        recoparts = ['quadrature', 'phase_rotate', 'zero_filling', 'FT', 'phase_corr_pi', 
+                  'cutoff',  'scale_phase_channels', 'transposition']
+    
+    # all transposition the same?
+    same_transposition = True
+    for i in get_value(reco, 'RECO_transposition'):
+        if i != get_value(reco, 'RECO_transposition')[0]:
+            same_transposition = False
+    
+    map_index= np.reshape( np.arange(0,kdata.shape[5]*kdata.shape[6]), (kdata.shape[6], kdata.shape[5]) ).flatten()
+    
+    for recopart in recoparts:
+        if 'quadrature' in recopart:
+            for NR in range(N7):
+                for NI in range(N6):
+                    for channel in range(N5):
+                        reco_result[:,:,:,:,channel,NI,NR] = recoFunctions.reco_qopts(kdata[:,:,:,:,channel,NI,NR], reco, map_index[(NI+1)*(NR+1)-1])
+        
+         
+        if 'phase_rotate' in recopart:
+            for NR in range(N7):
+                for NI in range(N6):
+                    for channel in range(N5):
+                        #print(map_index[(NR+1)*(NI+1)-1])
+                        reco_result[:,:,:,:,channel,NI,NR] = recoFunctions.reco_phase_rotate(kdata[:,:,:,:,channel,NI,NR], reco, map_index[(NI+1)*(NR+1)-1])
+                       
+        """ Need to look into if this case ever occurs
+        if 'zero_filling' in recopart:
+            RECO_ft_size = get_value(reco,'RECO_ft_size')
+            #reco_zero_filling
+        """
+        
+        if 'FT' in recopart:
+            for NR in range(N7):
+                for NI in range(N6):
+                    for chan in range(N5):
+                        reco_result[:,:,:,:,chan,NI,NR] = recoFunctions.reco_FT(reco_result[:,:,:,:,chan,NI,NR], reco, map_index[(NI+1)*(NR+1)-1])
+        
+        if 'image_rotate' in recopart:
+            for NR in range(N7):
+                for NI in range(N6):
+                    for chan in range(N5):
+                        reco_result[:,:,:,:,chan,NI,NR] = recoFunctions.reco_image_rotate(reco_result[:,:,:,:,chan,NI,NR], reco, map_index[(NI+1)*(NR+1)-1])
+        
+        
+        if 'phase_corr_pi' in recopart:
+            for NR in range(N7):
+                for NI in range(N6):
+                    for chan in range(N5):
+                        reco_result[:,:,:,:,chan,NI,NR] = recoFunctions.reco_phase_corr_pi(reco_result[:,:,:,:,chan,NI,NR], reco, map_index[(NI+1)*(NR+1)-1])
+        
+        if 'cutoff' in recopart: 
+            newdata_dims=[1, 1, 1, 1]
+            reco_size = get_value(reco, 'RECO_size')
+            newdata_dims[0:len(reco_size)] = reco_size
+            #print(newdata_dims)
+            newdata = np.zeros(shape=newdata_dims+[N5, N6, N7], dtype=np.complex128)
+            
+            for NR in range(N7):
+                for NI in range(N6):
+                    for chan in range(N5):
+                        newdata[:,:,:,:,chan,NI,NR] = recoFunctions.reco_cutoff(reco_result[:,:,:,:,chan,NI,NR], reco, map_index[(NI+1)*(NR+1)-1])
+        
+            reco_result=newdata
+        
+        
+        if 'scale_phase_channels' in recopart: 
+            for NR in range(N7):
+                for NI in range(N6):
+                    for chan in range(N5):
+                        reco_result[:,:,:,:,chan,NI,NR] = recoFunctions.reco_scale_phase_channels(reco_result[:,:,:,:,chan,NI,NR], reco, chan)
+         
+        if 'sumOfSquares' in recopart:
+            for NR in range(N7):
+                for NI in range(N6):
+                    #print(reco_result[:,:,:,:,:1,NI,NR].shape)
+                    #print(NR+1, NI+1)
+                    reco_result[:,:,:,:,:1,NI,NR] = recoFunctions.reco_sumofsquares(reco_result[:,:,:,:,:,NI,NR], reco)
+                    #reco_result.astype(np.int64)
+        #     reco_result = reco_result[:,:,:,:,:1,:,:]
+        
+    
+        if 'transposition' in recopart:
+            if same_transposition:
+                # import variables:
+                RECO_transposition = get_value(reco,'RECO_transposition')[0]
+                # calculate additional variables:
+            
+                # start process
+                if RECO_transposition > 0:
+                    ch_dim1 = (RECO_transposition % len(kdata.shape)) + 1
+                    ch_dim2 = RECO_transposition - 1 + 1
+                    new_order = [0, 1, 2, 3]
+                    new_order[ch_dim1] = ch_dim2
+                    new_order[ch_dim2] = ch_dim1
+                    reco_result = reco_result.transpose(new_order + [4, 5, 6])
+            else:
+                for NR in range(N7):
+                    for NI in range(N6):
+                        for chan in range(N5):
+                            reco_result[:,:,:,:,chan,NI,NR] = recoFunctions.reco_transposition(reco_result[:,:,:,:,chan,NI,NR], reco, map_index[(NI+1)*(NR+1)-1])
+
+    return reco_result
