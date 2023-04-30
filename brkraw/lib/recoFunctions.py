@@ -5,7 +5,7 @@ Created on Thu Jan 26 17:57:02 2023
 @author: 
 """
 
-from brkraw.lib.utils import get_value
+from .utils import get_value
 import numpy as np
 
 def reco_qopts(frame, Reco, actual_framenumber):

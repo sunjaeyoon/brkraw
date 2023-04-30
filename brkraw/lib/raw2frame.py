@@ -5,8 +5,8 @@ Created on Thu Feb  2 10:06:38 2023
 @author: 
 """
 
-from brkraw.lib.utils import get_value, set_value
-import recoFunctions
+from .utils import get_value, set_value
+import .recoFunctions
 import numpy as np
 
 def readBrukerRaw(fid_binary, acqp, meth):
@@ -300,7 +300,7 @@ def brkraw_Reco(kdata, reco, meth, recoparts = 'all'):
             reco_size = get_value(reco, 'RECO_size')
             newdata_dims[0:len(reco_size)] = reco_size
             newdata = np.zeros(shape=newdata_dims+[N5, N6, N7], dtype=np.complex128)
-            #print("new_data",newdata.shape)
+            
             for NR in range(N7):
                 for NI in range(N6):
                     for chan in range(N5):
